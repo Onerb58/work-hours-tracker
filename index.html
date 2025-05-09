@@ -1,194 +1,130 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Work Hours & Earnings Tracker</title>
   <style>
-    body { font-family: Arial, sans-serif; padding: 20px; }
-    input, textarea, button { margin: 5px; padding: 5px; }
-    table { border-collapse: collapse; margin-top: 20px; width: 100%; }
-    th, td { padding: 10px; border: 1px solid #ccc; text-align: center; }
-    textarea { width: 300px; height: 50px; vertical-align: middle; }
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    table, th, td {
+      border: 1px solid black;
+      border-collapse: collapse;
+    }
+    th, td {
+      padding: 8px;
+    }
+    .week-group {
+      margin-bottom: 40px;
+    }
   </style>
 </head>
 <body>
+  <h1>Work Hours & Earnings Tracker</h1>
 
-<h2>Work Hours & Earnings Tracker</h2>
+  <label>Hourly Rate: <input type="number" id="hourlyRate" step="0.01" /></label>
+  <br /><br />
 
-<form id="workForm">
-  <label>Week Date Range: <input type="text" id="weekRange" placeholder="e.g. May 1 - May 7" required></label><br><br>
-  <label>Hourly Rate ($): <input type="number" id="hourlyRate" step="0.01" required></label><br><br>
-
-  <label>Monday: <input type="number" id="mon" step="0.1"></label>
-  <label>Tuesday: <input type="number" id="tue" step="0.1"></label>
-  <label>Wednesday: <input type="number" id="wed" step="0.1"></label><br>
-  <label>Thursday: <input type="number" id="thu" step="0.1"></label>
-  <label>Friday: <input type="number" id="fri" step="0.1"></label>
-  <label>Saturday: <input type="number" id="sat" step="0.1"></label>
-  <label>Sunday: <input type="number" id="sun" step="0.1"></label><br><br>
-
-  <label>Breaks (total hours for week): <input type="number" id="breaks" step="0.1" value="0"></label><br><br>
-  <label>Co-worker(s): <input type="text" id="coworker" placeholder="Names separated by commas"></label><br><br>
-  <label>Notes:<br><textarea id="notes" placeholder="Optional notes for this week..."></textarea></label><br><br>
-
-  <button type="button" onclick="addWeek()">Add Week</button>
-  <button type="button" onclick="downloadCSV()">Download CSV</button>
-  <button type="button" onclick="clearData()">Clear All Data</button>
-</form>
-
-<div id="weekTable"></div>
-
-<script>
-  let allWeeks = [];
-
-  window.onload = () => {
-    const saved = localStorage.getItem("workLog");
-    if (saved) {
-      allWeeks = JSON.parse(saved);
-      renderTable();
-    }
-  };
-
-  function saveData() {
-    localStorage.setItem("workLog", JSON.stringify(allWeeks));
-  }
-
-  function addWeek() {
-    const range = document.getElementById("weekRange").value.trim();
-    const rate = parseFloat(document.getElementById("hourlyRate").value);
-    const breaks = parseFloat(document.getElementById("breaks").value) || 0;
-    const coworker = document.getElementById("coworker").value.trim();
-    const notes = document.getElementById("notes").value.trim();
-
-    if (!range) return alert("Please enter a week date range.");
-    if (!rate) return alert("Please enter hourly rate.");
-
-    const days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
-    let hours = 0;
-    let dailyHours = [];
-
-    for (let d of days) {
-      const val = parseFloat(document.getElementById(d).value) || 0;
-      hours += val;
-      dailyHours.push(val);
-    }
-
-    const workedHours = Math.max(0, hours - breaks);
-    const regHours = Math.min(40, workedHours);
-    const otHours = Math.max(0, workedHours - 40);
-    const regPay = regHours * rate;
-    const otPay = otHours * rate * 1.5;
-    const totalPay = regPay + otPay;
-
-    const weekData = {
-      week: allWeeks.length + 1,
-      range,
-      dailyHours,
-      totalHours: workedHours,
-      breaks,
-      regHours,
-      otHours,
-      regPay,
-      otPay,
-      totalPay,
-      rate,
-      coworker,
-      notes
-    };
-
-    allWeeks.push(weekData);
-    saveData();
-    renderTable();
-    document.getElementById("workForm").reset();
-  }
-
-  function renderTable() {
-    if (allWeeks.length === 0) return;
-
-    let table = `<h3>Weekly Log</h3><table>
+  <table id="workTable">
+    <thead>
       <tr>
-        <th>Week</th><th>Date Range</th>
-        <th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th><th>Sun</th>
-        <th>Breaks</th><th>Total Hrs</th><th>Reg Hrs</th><th>OT Hrs</th>
-        <th>Reg Pay</th><th>OT Pay</th><th>Total Pay</th>
-        <th>Co-worker(s)</th><th>Notes</th>
-      </tr>`;
+        <th>Date</th>
+        <th>Hours Worked</th>
+        <th>Break (hrs)</th>
+        <th>Notes</th>
+        <th>Co-worker</th>
+      </tr>
+    </thead>
+    <tbody id="workBody">
+      <tr>
+        <td><input type="date" /></td>
+        <td><input type="number" step="0.01" class="hours" /></td>
+        <td><input type="number" step="0.01" class="breaks" /></td>
+        <td><input type="text" class="notes" /></td>
+        <td><input type="text" class="coworker" /></td>
+      </tr>
+    </tbody>
+  </table>
+  <br />
+  <button onclick="addRow()">Add Row</button>
+  <button onclick="calculate()">Calculate</button>
 
-    let sumHours = 0, sumReg = 0, sumOT = 0, sumPay = 0, sumOTPay = 0;
+  <div id="results"></div>
 
-    for (let w of allWeeks) {
-      table += `<tr>
-        <td>${w.week}</td>
-        <td>${w.range}</td>
-        ${w.dailyHours.map(h => `<td>${h.toFixed(1)}</td>`).join("")}
-        <td>${w.breaks.toFixed(1)}</td>
-        <td>${w.totalHours.toFixed(1)}</td>
-        <td>${w.regHours.toFixed(1)}</td>
-        <td>${w.otHours.toFixed(1)}</td>
-        <td>${w.regPay.toFixed(2)}</td>
-        <td>${w.otPay.toFixed(2)}</td>
-        <td>${w.totalPay.toFixed(2)}</td>
-        <td>${w.coworker}</td>
-        <td>${w.notes}</td>
-      </tr>`;
-      sumHours += w.totalHours;
-      sumReg += w.regPay;
-      sumOT += w.otHours;
-      sumOTPay += w.otPay;
-      sumPay += w.totalPay;
+  <script>
+    function addRow() {
+      const row = document.createElement("tr");
+      row.innerHTML = `
+        <td><input type="date" /></td>
+        <td><input type="number" step="0.01" class="hours" /></td>
+        <td><input type="number" step="0.01" class="breaks" /></td>
+        <td><input type="text" class="notes" /></td>
+        <td><input type="text" class="coworker" /></td>
+      `;
+      document.getElementById("workBody").appendChild(row);
     }
 
-    table += `<tr style="font-weight:bold">
-      <td colspan="10">Totals</td>
-      <td>${sumHours.toFixed(1)}</td><td></td>
-      <td>${sumOT.toFixed(1)}</td>
-      <td>${sumReg.toFixed(2)}</td>
-      <td>${sumOTPay.toFixed(2)}</td>
-      <td>${sumPay.toFixed(2)}</td><td></td><td></td>
-    </tr>`;
+    function calculate() {
+      const hourlyRate = parseFloat(document.getElementById("hourlyRate").value);
+      const rows = document.querySelectorAll("#workBody tr");
 
-    table += `</table>`;
-    document.getElementById("weekTable").innerHTML = table;
-  }
+      let records = [];
 
-  function downloadCSV() {
-    if (allWeeks.length === 0) return alert("No data to export.");
+      rows.forEach(row => {
+        const date = new Date(row.cells[0].querySelector("input").value);
+        const hours = parseFloat(row.cells[1].querySelector("input").value) || 0;
+        const breaks = parseFloat(row.cells[2].querySelector("input").value) || 0;
+        const netHours = Math.max(hours - breaks, 0);
 
-    let csv = "Week,Date Range,Mon,Tue,Wed,Thu,Fri,Sat,Sun,Breaks,Total Hours,Regular Hours,Overtime Hours,Regular Pay,Overtime Pay,Total Pay,Hourly Rate,Co-worker(s),Notes\n";
+        if (!isNaN(date.getTime())) {
+          records.push({ date, netHours });
+        }
+      });
 
-    allWeeks.forEach(w => {
-      csv += [
-        w.week,
-        `"${w.range}"`,
-        ...w.dailyHours,
-        w.breaks.toFixed(1),
-        w.totalHours.toFixed(1),
-        w.regHours.toFixed(1),
-        w.otHours.toFixed(1),
-        w.regPay.toFixed(2),
-        w.otPay.toFixed(2),
-        w.totalPay.toFixed(2),
-        w.rate,
-        `"${w.coworker}"`,
-        `"${w.notes.replace(/"/g, '""')}"`
-      ].join(",") + "\n";
-    });
+      records.sort((a, b) => a.date - b.date);
 
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'work_hours.csv';
-    a.click();
-  }
+      const results = document.getElementById("results");
+      results.innerHTML = "<h2>Results</h2>";
 
-  function clearData() {
-    if (confirm("Are you sure you want to clear all saved data?")) {
-      localStorage.removeItem("workLog");
-      allWeeks = [];
-      renderTable();
+      let totalHours = 0;
+      let totalPay = 0;
+      let overtimePay = 0;
+
+      for (let i = 0; i < records.length; i += 14) {
+        let group = records.slice(i, i + 14);
+        let groupHours = 0;
+        let groupHTML = `<div class="week-group"><table><tr><th>Date</th><th>Hours</th><th>Pay</th><th>Overtime Pay</th></tr>`;
+
+        group.forEach(({ date, netHours }) => {
+          let regular = Math.min(netHours, 8);
+          let overtime = Math.max(netHours - 8, 0);
+          let dailyPay = regular * hourlyRate;
+          let dailyOTPay = overtime * hourlyRate * 1.5;
+
+          groupHTML += `<tr>
+            <td>${date.toLocaleDateString()}</td>
+            <td>${netHours.toFixed(2)}</td>
+            <td>$${dailyPay.toFixed(2)}</td>
+            <td>$${dailyOTPay.toFixed(2)}</td>
+          </tr>`;
+
+          groupHours += netHours;
+          totalHours += netHours;
+          totalPay += dailyPay;
+          overtimePay += dailyOTPay;
+        });
+
+        groupHTML += `</table></div>`;
+        results.innerHTML += groupHTML;
+      }
+
+      results.innerHTML += `<p><strong>Total Hours Worked:</strong> ${totalHours.toFixed(2)}</p>`;
+      results.innerHTML += `<p><strong>Total Regular Pay:</strong> $${totalPay.toFixed(2)}</p>`;
+      results.innerHTML += `<p><strong>Total Overtime Pay:</strong> $${overtimePay.toFixed(2)}</p>`;
+      results.innerHTML += `<p><strong>Total Earnings:</strong> $${(totalPay + overtimePay).toFixed(2)}</p>`;
     }
-  }
-</script>
-
+  </script>
 </body>
 </html>
