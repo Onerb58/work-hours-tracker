@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Work Hours & Earnings Tracker</title>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; color: #333; }
+    h2, h3 { text-align: center; }
+    form { background-color: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); max-width:1000px; margin:0 auto 30px auto; }
+    .form-group { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:15px; }
+    .form-group label { flex:1 1 150px; min-width:140px; }
+    label { display:block; margin:10px 0 5px; }
+    input, textarea, button { padding:8px; font-size:1rem; margin-bottom:10px; width:100%; max-width:300px; border-radius:4px; border:1px solid #ccc; }
+    textarea { resize:vertical; height:60px; }
+    button { background-color:#4a90e2; color:white; border:none; cursor:pointer; width:auto; margin-right:10px; }
+    button:hover { background-color:#357ab8; }
+    .day-entry { margin-bottom:15px; border-bottom:1px solid #ccc; padding-bottom:10px; }
+    .week-block { margin-bottom:40px; }
+    table { width:100%; border-collapse:collapse; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
+    th, td { border:1px solid #ddd; padding:10px; text-align:center; }
+    th { background:#f0f0f0; font-weight:bold; }
+    tr:nth-child(even) { background:#f9f9f9; }
+    .subtotal-row { font-weight:bold; background:#eaf2fb; }
+    .total-row { font-weight:bold; background:#d0e5f7; }
+    .action-btn { background:#777; padding:4px 8px; margin:0 2px; }
+    .action-btn:hover { background:#555; }
+  </style>
+</head>
+<body>
+
+<h2>Work Hours & Earnings Tracker</h2>
+
+<form id="workForm">
+  <div class="form-group">
+    <label>Week Date Range:<input type="text" id="weekRange" placeholder="e.g. May 1 - May 7" required></label>
+    <label>Hourly Rate ($):<input type="number" id="hourlyRate" step="0.01" required></label>
+    <label>Breaks (hrs per week):<input type="number" id="breaks" step="0.1" value="0"></label>
+  </div>
+
+  <div id="dailyInputs"></div>
+
+  <div style="margin-top:15px;">
+    <button type="button" id="submitBtn">Add Week</button>
+    <button type="button" onclick="clearData()">Clear All Data</button>
+  </div>
+</form>
+
+<div id="weekTable"></div>
+
+<script>
+const days = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+let allWeeks = [];
+let editIndex = null;
+const container = document.getElementById("dailyInputs");
+
+days.forEach((day,i)=>{
+  container.innerHTML += `
+    <div class="day-entry">
+      <h4>${day}</h4>
+      <label>Hours:<input type="number" id="day${i}_hours" step="0.01"></label>
+      <label>Co-worker:<input type="text" id="day${i}_coworker"></label>
+      <label>Note:<input type="text" id="day${i}_note"></label>
+    </div>`;
+});
+
+document.getElementById('submitBtn').onclick = function() { editIndex===null? addWeek(): updateWeek(); };
+
+window.onload = ()=>{ const saved = localStorage.getItem('workLog'); if(saved){ allWeeks=JSON.parse(saved); renderTable(); } };
+function saveData(){ localStorage.setItem('workLog',JSON.stringify(allWeeks)); }
+
+function collectEntries(){ const rate=parseFloat(document.getElementById('hourlyRate').value);
+ const range=document.getElementById('weekRange').value.trim(); const breaks=parseFloat(document.getElementById('breaks').value)||0;
+ if(!range||!rate) return null;
+ let total=0; let entries=[];
+ days.forEach((_,i)=>{ const h=parseFloat(document.getElementById(`day${i}_hours`).value)||0;
+ const c=document.getElementById(`day${i}_coworker`).value.trim(); const n=document.getElementById(`day${i}_note`).value.trim(); total+=h; entries.push({hours:h,coworker:c,note:n}); });
+ const worked=Math.max(0,total-breaks); const reg=Math.min(40,worked); const ot=Math.max(0,worked-40);
+ const regPay=reg*rate, otPay=ot*rate*1.5, totPay=regPay+otPay;
+ return {range,rate,breaks,entries,worked,reg,ot,regPay,otPay,totPay}; }
+
+function addWeek(){ const data=collectEntries(); if(!data) return alert('Please fill range and rate');
+ const wk={week:allWeeks.length+1,...data}; allWeeks.push(wk); finishUpdate(); }
+function updateWeek(){ const data=collectEntries(); if(!data) return alert('Fill range and rate');
+ allWeeks[editIndex]={week:editIndex+1,...data}; finishUpdate(); editIndex=null; document.getElementById('submitBtn').innerText='Add Week'; }
+function finishUpdate(){ saveData(); renderTable(); document.getElementById('workForm').reset(); }
+
+function editWeek(idx){ const w=allWeeks[idx]; editIndex=idx;
+ document.getElementById('weekRange').value=w.range; document.getElementById('hourlyRate').value=w.rate;
+ document.getElementById('breaks').value=w.breaks;
+ w.entries.forEach((d,i)=>{ document.getElementById(`day${i}_hours`).value=d.hours;
+ document.getElementById(`day${i}_coworker`).value=d.coworker;
+ document.getElementById(`day${i}_note`).value=d.note; });
+ document.getElementById('submitBtn').innerText='Update Week'; }
+
+function deleteWeek(idx){ if(!confirm('Delete this week?')) return;
+ allWeeks.splice(idx,1); allWeeks.forEach((w,i)=>w.week=i+1); finishUpdate(); }
+
+function renderTable(){ let html='<h3>Weekly Logs</h3>';
+ allWeeks.forEach((w,i)=>{ html+=`<div class="week-block"><table><tr><th>Week</th><th>Range</th>`+
+ days.map(d=>`<th>${d}</th>`).join('')+`<th>Brks</th><th>Tot Hrs</th><th>Reg</th><th>OT</th><th>Reg $</th><th>OT $</th><th>Total $</th><th>Actions</th></tr>`;
+ html+=`<tr><td>${w.week}</td><td>${w.range}</td>`+
+ w.entries.map(d=>`<td>${d.hours.toFixed(2)}<br><small>${d.coworker}</small><br><em>${d.note}</em></td>`).join('')+
+ `<td>${w.breaks.toFixed(2)}</td><td>${w.worked.toFixed(2)}</td><td>${w.reg.toFixed(2)}</td><td>${w.ot.toFixed(2)}</td>`+
+ `<td>${w.regPay.toFixed(2)}</td><td>${w.otPay.toFixed(2)}</td><td>${w.totPay.toFixed(2)}</td>`+
+ `<td><button class="action-btn" onclick="editWeek(${i})">Edit</button><button class="action-btn" onclick="deleteWeek(${i})">Del</button></td></tr></table></div>`; });
+ html+=`<table><tr class="total-row"><td colspan="${3+days.length}">TOTAL</td>`+
+ `<td>${allWeeks.reduce((s,w)=>s+w.breaks,0).toFixed(2)}</td>`+
+ `<td>${allWeeks.reduce((s,w)=>s+w.worked,0).toFixed(2)}</td>`+
+ `<td>${allWeeks.reduce((s,w)=>s+w.reg,0).toFixed(2)}</td>`+
+ `<td>${allWeeks.reduce((s,w)=>s+w.ot,0).toFixed(2)}</td>`+
+ `<td>${allWeeks.reduce((s,w)=>s+w.regPay,0).toFixed(2)}</td>`+
+ `<td>${allWeeks.reduce((s,w)=>s+w.otPay,0).toFixed(2)}</td>`+
+ `<td>${allWeeks.reduce((s,w)=>s+w.totPay,0).toFixed(2)}</td><td></td></tr></table>`;
+ document.getElementById('weekTable').innerHTML=html; }
+
+function clearData(){ if(confirm('Clear all data?')){ localStorage.removeItem('workLog'); allWeeks=[]; renderTable(); }}
+</script>
+</body>
+</html>
