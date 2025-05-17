@@ -1,0 +1,200 @@
+<script>
+  // 1. Define dayNames for all functions to see:
+  const dayNames = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+
+  // 2. State & init
+  let allWeeks   = JSON.parse(localStorage.getItem('workLog') || '[]');
+  let editIndex  = -1;
+  const submitBtn = document.getElementById('submitBtn');
+  const form      = document.getElementById('workForm');
+  const weekTbl   = document.getElementById('weekTable');
+
+  // 3. Save or update a week
+  function saveWeek(){
+    // explicitly grab form fields
+    const rangeEl  = document.getElementById('weekRange');
+    const rateEl   = document.getElementById('hourlyRate');
+    const breaksEl = document.getElementById('breaks');
+
+    const range = rangeEl.value.trim();
+    const rate  = parseFloat(rateEl.value);
+    const br    = parseFloat(breaksEl.value) || 0;
+
+    if (!range || isNaN(rate)) {
+      alert("Please fill in both the date range and a valid hourly rate.");
+      return;
+    }
+
+    // collect day entries
+    let total = 0, daily = [];
+    dayNames.forEach(d => {
+      const hrsEl  = document.getElementById(`${d}_hrs`);
+      const cowEl  = document.getElementById(`${d}_cow`);
+      const noteEl = document.getElementById(`${d}_note`);
+      const h = parseFloat(hrsEl.value) || 0;
+      total += h;
+      daily.push({
+        h,
+        c: cowEl.value.trim(),
+        n: noteEl.value.trim()
+      });
+    });
+
+    // calculate pay
+    const worked = Math.max(0, total - br);
+    const reg    = Math.min(40, worked);
+    const ot     = Math.max(0, worked - 40);
+    const regPay = reg * rate;
+    const otPay  = ot  * rate * 1.5;
+    const totPay = regPay + otPay;
+
+    const entry = { range, rate, br, daily, worked, reg, ot, regPay, otPay, totPay };
+
+    if (editIndex >= 0) allWeeks[editIndex] = entry;
+    else                allWeeks.push(entry);
+
+    localStorage.workLog = JSON.stringify(allWeeks);
+    resetForm();
+    renderTable();
+  }
+
+  // 4. Render table with edit/delete
+  function renderTable(){
+    if (!allWeeks.length) {
+      weekTbl.innerHTML = '';
+      return;
+    }
+    let html = '<h3>Weekly Logs</h3>';
+    let grand = {worked:0,reg:0,ot:0,regPay:0,otPay:0,totPay:0};
+
+    for (let i = 0; i < allWeeks.length; i += 2) {
+      const block = allWeeks.slice(i,i+2);
+      html += `<table>
+        <tr>
+          <th>Wk</th><th>Range</th>${dayNames.map(d=>`<th>${d.slice(0,3)}</th>`).join('')}
+          <th>Br</th><th>Work</th><th>Reg</th><th>OT</th>
+          <th>Reg$</th><th>OT$</th><th>Total$</th><th>⛶</th>
+        </tr>`;
+      let sub = {worked:0,reg:0,ot:0,regPay:0,otPay:0,totPay:0};
+
+      block.forEach((w, j) => {
+        const idx = i+j;
+        html += `<tr>
+          <td>${idx+1}</td>
+          <td>${w.range}</td>
+          ${w.daily.map(d=>`<td>
+            ${d.h.toFixed(2)}<br>
+            <small>${d.c}</small><br>
+            <em>${d.n}</em>
+          </td>`).join('')}
+          <td>${w.br.toFixed(2)}</td>
+          <td>${w.worked.toFixed(2)}</td>
+          <td>${w.reg.toFixed(2)}</td>
+          <td>${w.ot.toFixed(2)}</td>
+          <td>${w.regPay.toFixed(2)}</td>
+          <td>${w.otPay.toFixed(2)}</td>
+          <td>${w.totPay.toFixed(2)}</td>
+          <td class="actions">
+            <button onclick="startEdit(${idx})">Edit</button>
+            <button onclick="deleteWeek(${idx})">Del</button>
+          </td>
+        </tr>`;
+        ['worked','reg','ot','regPay','otPay','totPay'].forEach(k=>{
+          sub[k]   += w[k];
+          grand[k] += w[k];
+        });
+      });
+
+      html += `<tr class="subtotal">
+        <td colspan="2">Subtotal</td>
+        ${'<td></td>'.repeat(7)}
+        <td></td>
+        <td>${sub.worked.toFixed(2)}</td>
+        <td>${sub.reg.toFixed(2)}</td>
+        <td>${sub.ot.toFixed(2)}</td>
+        <td>${sub.regPay.toFixed(2)}</td>
+        <td>${sub.otPay.toFixed(2)}</td>
+        <td>${sub.totPay.toFixed(2)}</td>
+        <td></td>
+      </tr></table>`;
+    }
+
+    html += `<table><tr class="grand">
+      <td colspan="2">Grand Total</td>
+      ${'<td></td>'.repeat(7)}
+      <td></td>
+      <td>${grand.worked.toFixed(2)}</td>
+      <td>${grand.reg.toFixed(2)}</td>
+      <td>${grand.ot.toFixed(2)}</td>
+      <td>${grand.regPay.toFixed(2)}</td>
+      <td>${grand.otPay.toFixed(2)}</td>
+      <td>${grand.totPay.toFixed(2)}</td>
+      <td></td>
+    </tr></table>`;
+
+    weekTbl.innerHTML = html;
+  }
+
+  // 5. Start editing an existing week
+  function startEdit(i){
+    editIndex = i;
+    const w = allWeeks[i];
+    document.getElementById('weekRange').value   = w.range;
+    document.getElementById('hourlyRate').value  = w.rate;
+    document.getElementById('breaks').value      = w.br;
+    w.daily.forEach((d,j)=>{
+      const dn = dayNames[j];
+      document.getElementById(`${dn}_hrs`).value  = d.h;
+      document.getElementById(`${dn}_cow`).value  = d.c;
+      document.getElementById(`${dn}_note`).value = d.n;
+    });
+    submitBtn.textContent = "Update Week";
+  }
+
+  // 6. Delete
+  function deleteWeek(i){
+    if (confirm("Delete week "+(i+1)+"?")){
+      allWeeks.splice(i,1);
+      localStorage.workLog = JSON.stringify(allWeeks);
+      renderTable();
+    }
+  }
+
+  // 7. Clear all
+  function clearAll(){
+    if (confirm("Clear all data?")){
+      allWeeks = [];
+      localStorage.removeItem('workLog');
+      renderTable();
+    }
+  }
+
+  // 8. CSV export
+  function exportCSV(){
+    if (!allWeeks.length) return alert("No data to export.");
+    let csv = `Week,Range,${dayNames.map(d=>d.slice(0,3)).join(',')},Br,Work,Reg,OT,Reg$,OT$,Total$\n`;
+    allWeeks.forEach((w,i)=>{
+      csv += [
+        i+1,
+        `"${w.range}"`,
+        ...w.daily.map(d=>d.h.toFixed(2)),
+        w.br.toFixed(2),
+        w.worked.toFixed(2),
+        w.reg.toFixed(2),
+        w.ot.toFixed(2),
+        w.regPay.toFixed(2),
+        w.otPay.toFixed(2),
+        w.totPay.toFixed(2)
+      ].join(',') + "\n";
+    });
+    const blob = new Blob([csv],{type:'text/csv'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'work_hours.csv';
+    a.click();
+  }
+
+  // 9. Initial render
+  renderTable();
+</script>
+.html
