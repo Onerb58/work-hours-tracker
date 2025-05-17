@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Work Hours & Earnings Tracker</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f4f6f9;
+      margin: 0;
+      padding: 20px;
+      color: #333;
+    }
+    h2, h3 { text-align: center; }
+    form {
+      background-color: #fff;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+      max-width: 1000px;
+      margin: 0 auto 30px auto;
+    }
+    label { display: block; margin: 10px 0 5px; }
+    input, textarea, button {
+      padding: 8px;
+      font-size: 1rem;
+      margin-bottom: 10px;
+      width: 100%;
+      max-width: 300px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+    }
+    textarea { resize: vertical; height: 60px; }
+    button {
+      background-color: #4a90e2;
+      color: white;
+      border: none;
+      cursor: pointer;
+      width: auto;
+      margin-right: 10px;
+    }
+    button:hover { background-color: #357ab8; }
+    .form-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+    .form-group label { flex: 1 1 150px; min-width: 140px; }
+    .week-block { margin-bottom: 40px; }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      background: #fff;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 10px;
+      text-align: center;
+    }
+    th { background-color: #f0f0f0; font-weight: bold; }
+    tr:nth-child(even) { background-color: #f9f9f9; }
+    .subtotal-row { font-weight: bold; background-color: #eaf2fb; }
+    .total-row { font-weight: bold; background-color: #d0e5f7; }
+    .actions button { margin: 0 5px; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+
+<h2>Work Hours & Earnings Tracker</h2>
+
+<form id="workForm">
+  <div class="form-group">
+    <label>Week Date Range:
+      <input type="text" id="weekRange" placeholder="e.g. May 1 - May 7" required>
+    </label>
+    <label>Hourly Rate ($):
+      <input type="number" id="hourlyRate" step="0.01" required>
+    </label>
+    <label>Breaks (hrs per week):
+      <input type="number" id="breaks" step="0.1" value="0">
+    </label>
+  </div>
+
+  <!-- Daily entries -->
+  <div class="form-group">
+    <label>Monday Hours: <input type="number" id="mon" step="0.01"></label>
+    <label>Co-worker(s): <input type="text" id="mon_coworker"></label>
+    <label>Note: <input type="text" id="mon_note"></label>
+  </div>
+  <!-- ... Repeat for Tue-Sun -->
+  <div class="form-group">
+    <label>Tuesday Hours: <input type="number" id="tue" step="0.01"></label>
+    <label>Co-worker(s): <input type="text" id="tue_coworker"></label>
+    <label>Note: <input type="text" id="tue_note"></label>
+  </div>
+  <div class="form-group">
+    <label>Wednesday Hours: <input type="number" id="wed" step="0.01"></label>
+    <label>Co-worker(s): <input type="text" id="wed_coworker"></label>
+    <label>Note: <input type="text" id="wed_note"></label>
+  </div>
+  <div class="form-group">
+    <label>Thursday Hours: <input type="number" id="thu" step="0.01"></label>
+    <label>Co-worker(s): <input type="text" id="thu_coworker"></label>
+    <label>Note: <input type="text" id="thu_note"></label>
+  </div>
+  <div class="form-group">
+    <label>Friday Hours: <input type="number" id="fri" step="0.01"></label>
+    <label>Co-worker(s): <input type="text" id="fri_coworker"></label>
+    <label>Note: <input type="text" id="fri_note"></label>
+  </div>
+  <div class="form-group">
+    <label>Saturday Hours: <input type="number" id="sat" step="0.01"></label>
+    <label>Co-worker(s): <input type="text" id="sat_coworker"></label>
+    <label>Note: <input type="text" id="sat_note"></label>
+  </div>
+  <div class="form-group">
+    <label>Sunday Hours: <input type="number" id="sun" step="0.01"></label>
+    <label>Co-worker(s): <input type="text" id="sun_coworker"></label>
+    <label>Note: <input type="text" id="sun_note"></label>
+  </div>
+
+  <div style="margin-top: 15px;">
+    <button type="button" id="addBtn" onclick="submitWeek()">Add Week</button>
+    <button type="button" onclick="clearData()">Clear All Data</button>
+  </div>
+</form>
+
+<div id="weekTable"></div>
+
+<script>
+  let allWeeks = [];
+  let editIndex = -1;
+
+  window.onload = () => {
+    const saved = localStorage.getItem("workLog");
+    if (saved) {
+      allWeeks = JSON.parse(saved);
+      renderTable();
+    }
+  };
+
+  function saveData() {
+    localStorage.setItem("workLog", JSON.stringify(allWeeks));
+  }
+
+  function submitWeek() {
+    const range = document.getElementById("weekRange").value.trim();
+    const rate = parseFloat(document.getElementById("hourlyRate").value);
+    const breaks = parseFloat(document.getElementById("breaks").value) || 0;
+    if (!range) return alert("Please enter a week date range.");
+    if (!rate) return alert("Please enter hourly rate.");
+
+    const days = ["mon","tue","wed","thu","fri","sat","sun"];
+    let totalH = 0;
+    let entries = [];
+    days.forEach(d => {
+      const h = parseFloat(document.getElementById(d).value) || 0;
+      const c = document.getElementById(`${d}_coworker`).value.trim();
+      const n = document.getElementById(`${d}_note`).value.trim();
+      totalH += h;
+      entries.push({ hours: h, coworker: c, note: n });
+    });
+
+    const worked = Math.max(0, totalH - breaks);
+    const reg = Math.min(40, worked);
+    const ot = Math.max(0, worked - 40);
+    const regPay = reg * rate;
+    const otPay = ot * rate * 1.5;
+    const totalPay = regPay + otPay;
+
+    const data = { range, rate, breaks, entries, worked, reg, ot, regPay, otPay, totalPay };
+
+    if (editIndex > -1) {
+      allWeeks[editIndex] = data;
+      editIndex = -1;
+      document.getElementById("addBtn").innerText = "Add Week";
+    } else {
+      allWeeks.push(data);
+    }
+    saveData(); renderTable(); document.getElementById("workForm").reset();
+  }
+
+  function renderTable() {
+    if (!allWeeks.length) return;
+    let html = `<h3>Weekly Logs</h3><table><tr>
+      <th>#</th><th>Range</th><th>Details</th><th>Totals</th><th>Actions</th></tr>`;
+
+    allWeeks.forEach((w,i) => {
+      const details = w.entries.map((e,j) =>
+        `<div>${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][j]}: ${e.hours.toFixed(2)}h, ${e.coworker || '-'}, ${e.note || '-'}</div>`
+      ).join("");
+      const totals = `Worked: ${w.worked.toFixed(2)}h, Reg: ${w.reg.toFixed(2)}h, OT: ${w.ot.toFixed(2)}h, Pay: $${w.totalPay.toFixed(2)}`;
+      html += `<tr>
+        <td>${i+1}</td><td>${w.range}</td>
+        <td>${details}</td>
+        <td>${totals}</td>
+        <td class="actions">
+          <button onclick="editWeek(${i})">Edit</button>
+          <button onclick="deleteWeek(${i})">Delete</button>
+        </td>
+      </tr>`;
+    });
+
+    html += `</table>`;
+    document.getElementById("weekTable").innerHTML = html;
+  }
+
+  function editWeek(idx) {
+    const w = allWeeks[idx];
+    editIndex = idx;
+    document.getElementById("weekRange").value = w.range;
+    document.getElementById("hourlyRate").value = w.rate;
+    document.getElementById("breaks").value = w.breaks;
+    w.entries.forEach((e,j) => {
+      document.getElementById(["mon","tue","wed","thu","fri","sat","sun"][j]).value = e.hours;
+      document.getElementById(["mon_coworker","tue_coworker","wed_coworker","thu_coworker","fri_coworker","sat_coworker","sun_coworker"][j]).value = e.coworker;
+      document.getElementById(["mon_note","tue_note","wed_note","thu_note","fri_note","sat_note","sun_note"][j]).value = e.note;
+    });
+    document.getElementById("addBtn").innerText = "Update Week";
+  }
+
+  function deleteWeek(idx) {
+    if (confirm("Delete this week entry?")) {
+      allWeeks.splice(idx,1);
+      saveData(); renderTable();
+    }
+  }
+
+  function clearData() { if(confirm("Clear all data?")){ localStorage.removeItem("workLog"); allWeeks=[]; renderTable(); }}
+</script>
+
+</body>
+</html>
